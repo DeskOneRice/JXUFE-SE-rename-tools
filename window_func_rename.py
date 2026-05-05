@@ -31,6 +31,8 @@ class WindowFuncRename:
     DEFAULT_DIR_TEXT = "---未选择文件夹---"
 
     def __init__(self):
+        # 记录上次重命名的操作，用于撤回
+        self.rename_history = []
         # 创建主窗口
         self.window_func_rename = tk.Tk()
         # 设置全局字体：Arial 14号，提升可读性
@@ -54,6 +56,7 @@ class WindowFuncRename:
 
         # 显示已选文件夹路径的标签（初始为"未选择"）
         self.dir_selected = self.DEFAULT_DIR_TEXT
+        self._dir_full_path = None  # 完整路径，用于实际操作和下次打开对话框
         self.label_dir_path = tk.Label(
             self.window_func_rename,
             text=self.dir_selected,
@@ -119,12 +122,21 @@ class WindowFuncRename:
         )
         self.btn_rename.place(x=360, y=130)
 
+        # "撤回"按钮：撤回上一次批量重命名操作
+        self.btn_undo = tk.Button(
+            self.window_func_rename,
+            width=13,
+            text="撤回本次命名",
+            command=self.undo_rename
+        )
+        self.btn_undo.place(x=480, y=130)
+
         # 创建一个框架（Frame），用于容纳文本框和滚动条
         self.frame_res_view = tk.Frame(self.window_func_rename)
         self.frame_res_view.place(x=210, y=170)
 
         # 多行文本框：显示预览的重命名结果（只读，不可编辑）
-        self.text_res = tk.Text(self.frame_res_view, width=70, height=13)
+        self.text_res = tk.Text(self.frame_res_view, width=70, height=13, state="disabled")
         self.text_res.pack(side="left", fill="both", expand=True)
 
         # 垂直滚动条
@@ -161,9 +173,13 @@ class WindowFuncRename:
             self.entry_topic.get(),
             mode="preview"
         )
-        # 清空旧内容，插入新预览
+        # 清空旧内容，插入新预览（临时打开编辑，插入后恢复只读）
+        self.text_res.config(state="normal")
         self.text_res.delete(1.0, tk.END)
         self.text_res.insert('1.0', text)
+        self.text_res.config(state="disabled")
+        # 预览新的一批文件时，清空上一次的撤回记录
+        self.rename_history = []
 
     def res_rename(self):
         """执行实际的批量重命名操作"""
@@ -183,19 +199,46 @@ class WindowFuncRename:
             mode="work"
         )
         if result["success"]:
+            self.rename_history = result.get("renamed_pairs", [])
             messagebox.showinfo("成功", result["message"])
         else:
             messagebox.showerror("错误", result["message"])
 
+    def undo_rename(self):
+        """撤回上一次批量重命名操作"""
+        if not self.rename_history:
+            messagebox.showinfo("提示", "没有可撤回的操作！")
+            return
+
+        # 反向遍历，从最后一个改回第一个
+        success_count = 0
+        fail_count = 0
+        for old_path, new_path in reversed(self.rename_history):
+            try:
+                os.rename(new_path, old_path)
+                success_count += 1
+            except Exception:
+                fail_count += 1
+
+        self.rename_history = []
+
+        if fail_count == 0:
+            messagebox.showinfo("撤回成功", f"已撤回 {success_count} 个文件的重命名！")
+        else:
+            messagebox.showwarning("部分撤回", f"成功 {success_count} 个，失败 {fail_count} 个")
+
     def select_dir(self):
         """弹出文件夹选择对话框，并更新界面显示"""
+        # 初始时打开桌面，之后默认打开上次选择的文件夹
+        default_dir = self._dir_full_path or os.path.expanduser("~/Desktop")
         dir_path = filedialog.askdirectory(
             title="选择一个文件夹",
-            initialdir="C:/"  # 默认打开 C 盘根目录
+            initialdir=default_dir
         )
 
         # 为避免路径过长导致界面错乱，进行截断显示（如 .../班会材料）
         if dir_path != "":
+            self._dir_full_path = dir_path  # 保存完整路径
             self.dir_selected = dir_path
             display_text = dir_path
             if len(dir_path) > 40:  # 文件夹路径过长处理
@@ -205,9 +248,12 @@ class WindowFuncRename:
                     file_name = file_name[:37] + "..."  # .../部分文件名...
                 display_text = file_name
             self.label_dir_path.config(text=display_text)
-        else:
-            # 用户取消了选择
-            self.dir_selected = self.DEFAULT_DIR_TEXT
+            # 换了文件夹，清空预览区和撤回记录
+            self.text_res.config(state="normal")
+            self.text_res.delete(1.0, tk.END)
+            self.text_res.config(state="disabled")
+            self.rename_history = []
+        # 取消选择时保持原有状态不变
 
     def run(self):
         """启动 tkinter 的主事件循环（mainloop），让窗口显示出来并响应用户操作"""

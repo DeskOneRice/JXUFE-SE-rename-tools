@@ -161,6 +161,8 @@ def _preview_rename(file_list, topic):
 
 def _execute_rename(file_list, path, topic):
     """执行实际的批量重命名操作"""
+    renamed_pairs = []  # 记录每次重命名的 (旧路径, 新路径)，用于撤回
+
     for cur_file in file_list:
         # 构造绝对路径（避免 os.chdir）
         old_path = os.path.join(path, cur_file)
@@ -173,6 +175,7 @@ def _execute_rename(file_list, path, topic):
             new_bad_path = os.path.join(path, new_bad_name)
             try:
                 os.rename(old_path, new_bad_path)
+                renamed_pairs.append((old_path, new_bad_path))
             except Exception as e:
                 return {
                     "success": False,
@@ -186,6 +189,7 @@ def _execute_rename(file_list, path, topic):
         # 执行重命名
         try:
             os.rename(old_path, new_path)
+            renamed_pairs.append((old_path, new_path))
         except Exception as e:
             if isinstance(e, FileExistsError):
                 msg = f"存在重复的专业班级，请检查!\n来源于：{cur_file}"
@@ -194,4 +198,4 @@ def _execute_rename(file_list, path, topic):
             return {"success": False, "message": msg, "error_file": cur_file}
 
     # 全部成功
-    return {"success": True, "message": "批量重命名成功！"}
+    return {"success": True, "message": "批量重命名成功！", "renamed_pairs": renamed_pairs}
