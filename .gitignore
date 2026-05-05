@@ -1,0 +1,23 @@
+# Python 编译产生的临时文件（不需要上传）
+__pycache__/
+*.py[cod]
+*.pyo
+
+# PyInstaller 打包产物（太大了，不需要上传）
+build/
+dist/
+*.spec
+
+# PyCharm 编辑器的配置（每个人电脑上不一样，不需要上传）
+.idea/
+
+# Claude Code 的本地配置
+.claude/
+CLAUDE.md
+
+# Windows 系统文件
+Thumbs.db
+Desktop.ini
+
+# macOS 系统文件（如果用 Mac 的同学也参与开发）
+.DS_Store

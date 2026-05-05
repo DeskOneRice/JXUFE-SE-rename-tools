@@ -1,0 +1,209 @@
+# encoding: utf-8
+# @author: 花辞树
+# @file: func_rename.py
+# @time: 2024/10/15 20:48
+# @desc: 班会文件批量重命名的核心逻辑模块
+#        包含两个主要功能：
+#          1. 预览重命名效果 —— 安全无副作用
+#          2. 执行实际重命名 —— 会修改文件系统
+import os
+from tkinter import messagebox
+
+
+def get_major_class(filename_str):
+    """
+    从原始文件名中提取“专业+班级”信息（如“软件229”）
+
+    设计逻辑：
+      - 支持多个专业关键词（物联网、软件工程等）
+      - 优先匹配更具体的关键词（如“软件工程（中外合办）”）
+      - 专业关键词后紧跟的连续数字视为班级号（如“229”）
+      - 若无法识别专业或班级，则返回 None
+
+    示例：
+      输入："软件与物联网工程学院_软件工程229班材料.zip"
+      输出："软件229 "
+
+    注意：返回值末尾带一个空格，用于后续拼接（如“软件229 班会主题...”）
+    """
+    # 定义各专业可能的关键词列表（每个列表内，按优先级排序，越具体越靠前）
+    wlwdk = ["低空应用技术", "低空应用", "低空技术", "应用技术",
+             "低空经济", "低空", "经济", "物联网低空"]
+    wlw = ["物联网工程专业", "物联网工程", "物联网专业", "物联网"]
+    rjzw = ["软件工程（中外合办）", "软件工程(中外合办)", "软件（中外合办）", "软件(中外合办)",
+            "软件（中外）", "软件(中外)", "软件工程中外", "软件中外"]
+    rj = ["软件工程专业", "软件工程", "软件专业", "软件"]
+
+    # 将专业列表按优先级放入 majors
+    majors = [wlwdk, wlw, rjzw, rj]
+
+    # 预处理：需要提前从文件名中移除的干扰词
+    words_to_remove = ["软件与物联网工程学院", ".7z"]
+
+    # 初始化返回值
+    major_class = ""  # 最终返回的“专业+班级”字符串
+    found_major = False  # 是否成功识别出专业
+
+    # 清除干扰词
+    cleaned_str = filename_str
+    for word in words_to_remove:
+        idx = cleaned_str.find(word)
+        if idx != -1:
+            cleaned_str = cleaned_str.replace(word, "")
+
+    # 尝试匹配专业关键词
+    keyword_end_pos = -1
+    for major_list in majors:
+        for major_key in major_list:
+            idx = filename_str.find(major_key)
+            if idx != -1:
+                # 找到匹配的专业关键词
+                # 使用该专业列表的“标准名称”（取最后一个，即最简形式）
+                major_class = major_list[-1]
+                found_major = True
+                # 记录关键词在字符串中的结束位置（且+1），用于后续找班级号
+                keyword_end_pos = idx + len(major_key)
+                break
+        if found_major:
+            break
+
+    # 如果没找到任何专业关键词，直接返回 None（表示无法处理）
+    if not found_major:
+        return None
+
+    # 从专业关键词之后开始，提取连续的数字作为班级号
+    class_num = ""
+    # 从关键词结束位置开始往后扫描
+    for i in range(keyword_end_pos, len(cleaned_str)):
+        char = cleaned_str[i]
+        if '0' <= char <= '9':  # 是数字
+            class_num += char
+        elif class_num != "":  # 遇到非数字且已有数字 → 停止
+            break
+        # 如果还没开始收集数字，遇到非数字就继续
+
+    # 如果没提取到班级号，也视为无效
+    if not class_num:
+        return None
+
+    # 拼接“专业+班级”，并加一个空格（便于后续拼接主题）
+    result = major_class + class_num + " "  # 可以改成"班 "
+    return result
+
+
+def rename_files(path, topic, mode="preview"):
+    """
+    统一处理班会文件重命名：支持预览和执行两种模式
+
+    Args:
+        path (str): 目标文件夹路径
+        topic (str): 班会主题
+        mode (str): "preview"（仅预览）或 "work"（实际重命名）
+
+    Returns:
+        - mode="preview": str，预览文本
+        - mode="work": dict，包含:
+            {
+                "success": bool,
+                "message": str,      # 成功或错误信息
+                "error_file": str,   # 出错的文件名（可选）
+            }
+    """
+    assert mode in ["preview", "work"], "mode must be 'preview' or 'work'"
+
+    # 获取该目录下所有文件和文件夹的名称列表
+    try:
+        file_list = os.listdir(path)
+    except Exception as e:
+        if mode == "preview":
+            return f"【错误】无法访问目录：{path}\n原因：{e}"
+        else:
+            return {"success": False, "message": f"无法访问目录：{path}\n{e}"}
+
+    # 构建新文件名的各部分（占位符）
+    # [0]: 前缀（目前为空）
+    # [1]: 专业班级（由 get_major_class 提供）
+    # [2]: 班会主题（由用户输入）
+    # [3]: 固定后缀“ 班会材料”
+    # [4]: 原文件扩展名（如 .zip）
+    new_filename_parts = ["", "", topic, " 班会材料", ""]
+
+    # 初始化返回的预览文本
+    text_res = "【提示】批量规范命名（预览）已开始！！！\n"
+
+    if mode == "preview":
+        text_res = "【提示】批量规范命名（预览）已开始！！！\n"
+        for cur_file in file_list:
+            text_res += "=" * 70 + "\n"
+
+            # 提取扩展名
+            dot_index = cur_file.rfind(".")
+            ext = cur_file[dot_index:] if dot_index != -1 else ""
+            new_filename_parts[-1] = ext
+
+            # 提取专业班级
+            major_class_str = get_major_class(cur_file)
+            new_filename_parts[1] = major_class_str
+
+            if major_class_str is None:
+                text_res += "专业班级命名不规范！\n"
+                text_res += "来源于：" + cur_file + "\n"
+                continue
+
+            new_filename = "".join(new_filename_parts)
+            text_res += f"old_filename: {cur_file}\n"
+            text_res += f"new_filename: {new_filename}\n"
+
+        text_res += "=" * 70 + "\n"
+        text_res += "【提示】批量规范命名（预览）已完成！！！\n"
+        return text_res
+
+    elif mode == "work":
+        for cur_file in file_list:
+            # 构造绝对路径（避免 os.chdir）
+            old_path = os.path.join(path, cur_file)
+
+            # 提取扩展名
+            dot_index = cur_file.rfind(".")
+            ext = cur_file[dot_index:] if dot_index != -1 else ""
+            new_filename_parts[-1] = ext
+
+            # 提取专业班级
+            major_class_str = get_major_class(cur_file)
+            new_filename_parts[1] = major_class_str
+
+            if major_class_str is None:
+                # 标记异常文件
+                new_bad_name = "【!】" + cur_file
+                new_bad_path = os.path.join(path, new_bad_name)
+                try:
+                    os.rename(old_path, new_bad_path)
+                except Exception as e:
+                    return {
+                        "success": False,
+                        "message": f"标记异常文件失败：{cur_file}\n{e}",
+                        "error_file": cur_file
+                    }
+                continue
+
+            new_filename = "".join(new_filename_parts)
+            new_path = os.path.join(path, new_filename)
+
+            # 执行重命名
+            try:
+                os.rename(old_path, new_path)
+            except FileExistsError:
+                return {
+                    "success": False,
+                    "message": f"存在重复的专业班级，请检查!\n来源于：{cur_file}",
+                    "error_file": cur_file
+                }
+            except Exception as e:
+                return {
+                    "success": False,
+                    "message": f"重命名失败：{cur_file}\n{e}",
+                    "error_file": cur_file
+                }
+
+        # 全部成功
+        return {"success": True, "message": "批量重命名成功！"}
