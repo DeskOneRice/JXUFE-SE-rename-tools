@@ -33,8 +33,9 @@ class WindowFuncRename:
     def __init__(self):
         # 记录上次重命名的操作，用于撤回
         self.rename_history = []
-        # 创建主窗口
+        # 创建主窗口（先隐藏，避免闪烁）
         self.window_func_rename = tk.Tk()
+        self.window_func_rename.withdraw()
         # 设置全局字体：Arial 14号，提升可读性
         self.window_func_rename.option_add("*Font", font.Font(family='Arial', size=14))
         self.window_func_rename.title(self.__class__.__name__)
@@ -257,6 +258,7 @@ class WindowFuncRename:
 
     def run(self):
         """启动 tkinter 的主事件循环（mainloop），让窗口显示出来并响应用户操作"""
+        self.window_func_rename.deiconify()
         self.window_func_rename.mainloop()
 
 
