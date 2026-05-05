@@ -1,6 +1,6 @@
 # encoding: utf-8
 # @author: 花辞树
-# @file: window_func_rename.py
+# @file: main.py
 # @time: 2025/10/15 20:09
 # @desc: 班会文件批量重命名工具 —— GUI 界面入口
 import os
@@ -9,8 +9,8 @@ import tkinter as tk
 from tkinter import filedialog, font, messagebox
 
 # 导入自定义模块
-import public_tools      # 通用工具函数（如窗口居中）
-import func_rename       # 核心重命名逻辑（预览 + 执行）
+import utils      # 通用工具函数（如窗口居中）
+import core       # 核心重命名逻辑（预览 + 执行）
 
 def resource_path(relative_path):
     """ 获取资源文件的绝对路径，兼容 PyInstaller 打包 """
@@ -44,7 +44,7 @@ class WindowFuncRename:
         self.window_func_rename.iconbitmap(icon_path)  # 必须是 .ico 格式
 
         # 设置窗口大小为 1000x500，并居中显示（调用公共工具函数）
-        public_tools.set_window_geometry_center(self.window_func_rename, 1000, 500)
+        utils.set_window_geometry_center(self.window_func_rename, 1000, 500)
 
         # 提示标签："当前文件夹："
         self.label_dir_tip = tk.Label(
@@ -169,7 +169,7 @@ class WindowFuncRename:
             messagebox.showerror(title="错误", message="请输入本次的班会主题！")
             return
         # 调用业务逻辑模块，生成预览文本
-        text = func_rename.rename_files(
+        text = core.rename_files(
             self.dir_selected,
             self.entry_topic.get(),
             mode="preview"
@@ -194,7 +194,7 @@ class WindowFuncRename:
             messagebox.showerror(title="错误", message="为确保操作正确，请先查看预期结果！")
             return
         # 调用业务逻辑模块，执行重命名
-        result = func_rename.rename_files(
+        result = core.rename_files(
             self.dir_selected,
             self.entry_topic.get(),
             mode="work"
