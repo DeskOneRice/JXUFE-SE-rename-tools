@@ -7,24 +7,23 @@
 #          1. 预览重命名效果 —— 安全无副作用
 #          2. 执行实际重命名 —— 会修改文件系统
 import os
-from tkinter import messagebox
 
 
 def get_major_class(filename_str):
     """
-    从原始文件名中提取“专业+班级”信息（如“软件229”）
+    从原始文件名中提取"专业+班级"信息（如"软件229"）
 
     设计逻辑：
       - 支持多个专业关键词（物联网、软件工程等）
-      - 优先匹配更具体的关键词（如“软件工程（中外合办）”）
-      - 专业关键词后紧跟的连续数字视为班级号（如“229”）
+      - 优先匹配更具体的关键词（如"软件工程（中外合办）"）
+      - 专业关键词后紧跟的连续数字视为班级号（如"229"）
       - 若无法识别专业或班级，则返回 None
 
     示例：
       输入："软件与物联网工程学院_软件工程229班材料.zip"
       输出："软件229 "
 
-    注意：返回值末尾带一个空格，用于后续拼接（如“软件229 班会主题...”）
+    注意：返回值末尾带一个空格，用于后续拼接（如"软件229 班会主题..."）
     """
     # 定义各专业可能的关键词列表（每个列表内，按优先级排序，越具体越靠前）
     wlwdk = ["低空应用技术", "低空应用", "低空技术", "应用技术",
@@ -41,7 +40,7 @@ def get_major_class(filename_str):
     words_to_remove = ["软件与物联网工程学院", ".7z"]
 
     # 初始化返回值
-    major_class = ""  # 最终返回的“专业+班级”字符串
+    major_class = ""  # 最终返回的"专业+班级"字符串
     found_major = False  # 是否成功识别出专业
 
     # 清除干扰词
@@ -51,14 +50,14 @@ def get_major_class(filename_str):
         if idx != -1:
             cleaned_str = cleaned_str.replace(word, "")
 
-    # 尝试匹配专业关键词
+    # 尝试匹配专业关键词（在清理后的文件名中查找）
     keyword_end_pos = -1
     for major_list in majors:
         for major_key in major_list:
-            idx = filename_str.find(major_key)
+            idx = cleaned_str.find(major_key)
             if idx != -1:
                 # 找到匹配的专业关键词
-                # 使用该专业列表的“标准名称”（取最后一个，即最简形式）
+                # 使用该专业列表的"标准名称"（取最后一个，即最简形式）
                 major_class = major_list[-1]
                 found_major = True
                 # 记录关键词在字符串中的结束位置（且+1），用于后续找班级号
@@ -86,9 +85,23 @@ def get_major_class(filename_str):
     if not class_num:
         return None
 
-    # 拼接“专业+班级”，并加一个空格（便于后续拼接主题）
-    result = major_class + class_num + " "  # 可以改成"班 "
+    # 拼接"专业+班级"
+    result = major_class + class_num
     return result
+
+
+def _build_new_filename(original_name, topic):
+    """根据原始文件名和主题，生成新文件名"""
+    # 提取扩展名（如 ".zip"）
+    dot_index = original_name.rfind(".")
+    ext = original_name[dot_index:] if dot_index != -1 else ""
+
+    # 提取专业班级
+    major_class_str = get_major_class(original_name)
+    if major_class_str is None:
+        return None
+
+    return f"{major_class_str} {topic} 班会材料{ext}"
 
 
 def rename_files(path, topic, mode="preview"):
@@ -109,7 +122,7 @@ def rename_files(path, topic, mode="preview"):
                 "error_file": str,   # 出错的文件名（可选）
             }
     """
-    assert mode in ["preview", "work"], "mode must be 'preview' or 'work'"
+    assert mode in ("preview", "work"), "mode must be 'preview' or 'work'"
 
     # 获取该目录下所有文件和文件夹的名称列表
     try:
@@ -117,93 +130,68 @@ def rename_files(path, topic, mode="preview"):
     except Exception as e:
         if mode == "preview":
             return f"【错误】无法访问目录：{path}\n原因：{e}"
-        else:
-            return {"success": False, "message": f"无法访问目录：{path}\n{e}"}
-
-    # 构建新文件名的各部分（占位符）
-    # [0]: 前缀（目前为空）
-    # [1]: 专业班级（由 get_major_class 提供）
-    # [2]: 班会主题（由用户输入）
-    # [3]: 固定后缀“ 班会材料”
-    # [4]: 原文件扩展名（如 .zip）
-    new_filename_parts = ["", "", topic, " 班会材料", ""]
-
-    # 初始化返回的预览文本
-    text_res = "【提示】批量规范命名（预览）已开始！！！\n"
+        return {"success": False, "message": f"无法访问目录：{path}\n{e}"}
 
     if mode == "preview":
-        text_res = "【提示】批量规范命名（预览）已开始！！！\n"
-        for cur_file in file_list:
-            text_res += "=" * 70 + "\n"
+        return _preview_rename(file_list, topic)
+    return _execute_rename(file_list, path, topic)
 
-            # 提取扩展名
-            dot_index = cur_file.rfind(".")
-            ext = cur_file[dot_index:] if dot_index != -1 else ""
-            new_filename_parts[-1] = ext
 
-            # 提取专业班级
-            major_class_str = get_major_class(cur_file)
-            new_filename_parts[1] = major_class_str
+def _preview_rename(file_list, topic):
+    """生成重命名预览文本（不修改实际文件）"""
+    text_res = "【提示】批量规范命名（预览）已开始！！！\n"
 
-            if major_class_str is None:
-                text_res += "专业班级命名不规范！\n"
-                text_res += "来源于：" + cur_file + "\n"
-                continue
-
-            new_filename = "".join(new_filename_parts)
-            text_res += f"old_filename: {cur_file}\n"
-            text_res += f"new_filename: {new_filename}\n"
-
+    for cur_file in file_list:
         text_res += "=" * 70 + "\n"
-        text_res += "【提示】批量规范命名（预览）已完成！！！\n"
-        return text_res
 
-    elif mode == "work":
-        for cur_file in file_list:
-            # 构造绝对路径（避免 os.chdir）
-            old_path = os.path.join(path, cur_file)
+        new_filename = _build_new_filename(cur_file, topic)
 
-            # 提取扩展名
-            dot_index = cur_file.rfind(".")
-            ext = cur_file[dot_index:] if dot_index != -1 else ""
-            new_filename_parts[-1] = ext
+        if new_filename is None:
+            text_res += "专业班级命名不规范！\n"
+            text_res += "来源于：" + cur_file + "\n"
+            continue
 
-            # 提取专业班级
-            major_class_str = get_major_class(cur_file)
-            new_filename_parts[1] = major_class_str
+        text_res += f"old_filename: {cur_file}\n"
+        text_res += f"new_filename: {new_filename}\n"
 
-            if major_class_str is None:
-                # 标记异常文件
-                new_bad_name = "【!】" + cur_file
-                new_bad_path = os.path.join(path, new_bad_name)
-                try:
-                    os.rename(old_path, new_bad_path)
-                except Exception as e:
-                    return {
-                        "success": False,
-                        "message": f"标记异常文件失败：{cur_file}\n{e}",
-                        "error_file": cur_file
-                    }
-                continue
+    text_res += "=" * 70 + "\n"
+    text_res += "【提示】批量规范命名（预览）已完成！！！\n"
+    return text_res
 
-            new_filename = "".join(new_filename_parts)
-            new_path = os.path.join(path, new_filename)
 
-            # 执行重命名
+def _execute_rename(file_list, path, topic):
+    """执行实际的批量重命名操作"""
+    for cur_file in file_list:
+        # 构造绝对路径（避免 os.chdir）
+        old_path = os.path.join(path, cur_file)
+
+        new_filename = _build_new_filename(cur_file, topic)
+
+        if new_filename is None:
+            # 标记异常文件
+            new_bad_name = "【!】" + cur_file
+            new_bad_path = os.path.join(path, new_bad_name)
             try:
-                os.rename(old_path, new_path)
-            except FileExistsError:
-                return {
-                    "success": False,
-                    "message": f"存在重复的专业班级，请检查!\n来源于：{cur_file}",
-                    "error_file": cur_file
-                }
+                os.rename(old_path, new_bad_path)
             except Exception as e:
                 return {
                     "success": False,
-                    "message": f"重命名失败：{cur_file}\n{e}",
+                    "message": f"标记异常文件失败：{cur_file}\n{e}",
                     "error_file": cur_file
                 }
+            continue
 
-        # 全部成功
-        return {"success": True, "message": "批量重命名成功！"}
+        new_path = os.path.join(path, new_filename)
+
+        # 执行重命名
+        try:
+            os.rename(old_path, new_path)
+        except Exception as e:
+            if isinstance(e, FileExistsError):
+                msg = f"存在重复的专业班级，请检查!\n来源于：{cur_file}"
+            else:  # Exception
+                msg = f"重命名失败：{cur_file}\n{e}"
+            return {"success": False, "message": msg, "error_file": cur_file}
+
+    # 全部成功
+    return {"success": True, "message": "批量重命名成功！"}
